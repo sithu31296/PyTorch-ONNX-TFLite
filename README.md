@@ -43,6 +43,52 @@ torch.onnx.export(
 
 > **_output-names_**: If your model returns more than 1 output, provide exact length of arbitary names. For example, if your model returns 3 outputs, then `output_names` should be `['output0', 'output1', 'output3']`. If you don't provide exact length, although PT-ONNX conversion is successful, ONNX-TFLite conversion will not.
 
+> For more information about onnx model conversion, please check [ONNX_DETAILS](ONNX_DETAILS.md)
+
+### Verification
+
+You can verify the ONNX protobuf with `onnx` library.
+
+Install onnx:
+
+```bash
+pip install onnx
+```
+
+```python
+import onnx
+
+# Load the ONNX model
+model = onnx.load("model.onnx")
+
+# Check that the IR is well formed
+onnx.checker.check_model(model)
+
+# Print a Human readable representation of the graph
+onnx.helper.printable_graph(model.graph)
+```
+
+### ONNX Model Inference
+
+Install onnxruntime:
+
+```bash
+pip install onnxruntime
+```
+
+Then run the inference:
+
+```python
+import onnxruntime as ort
+
+ort_session = ort.InferenceSession('model.onnx')
+
+outputs = ort_session.run(
+    None,
+    {'input': np.random.randn(batch_size, channels, height, width).astype(np.float32)}
+)
+```
+
 ## ONNX to TF
 
 You cannot convert ONNX model directly into TFLite model. You must first convert to TensorFlow model.
@@ -82,6 +128,17 @@ You will get a Tensorflow model in *SavedModel* format.
 
 > Note: `tf_model_path` should not contain an extension like `.pb`.
 
+### TF Model Inference
+
+```python
+import tensorflow as tf
+
+model = tf.saved_model.load(tf_model_path)
+model.trainable = False
+
+input_tensor = tf.random.uniform([batch_size, channels, height, width])
+out = model(**{'input': input_tensor})
+```
 
 ## TF to TFLite
 
@@ -97,20 +154,7 @@ with open(tflite_model_path, 'wb') as f:
     f.write(tflite_model)
 ```
 
-## Load and Run TF Model
-
-```python
-import tensorflow as tf
-
-model = tf.saved_model.load(tf_model_path)
-model.trainable = False
-
-input_tensor = tf.random.uniform([batch_size, channels, height, width])
-
-out = model(**{'input': input_tensor})
-```
-
-## Load and Run TFLite Model 
+### TFLite Model Inference
 
 ```python
 import numpy as np
@@ -143,7 +187,7 @@ TFlite supports a subset of TF operations with some limitations. For full list o
 
 Most TFLite ops target float32 and quantized uint8 or int8 inference, but many ops don't support other types like float16 and strings.
 
-## Running TFLite with TF ops
+## TFLite with TF ops
 
 Since TFLite builtin ops only supports a limited number of TF operators, not every model is convertible. 
 
@@ -153,7 +197,7 @@ However, running TFLite models with TF Ops requires pulling in the core TF runti
 
 [TF Ops that can be enabled in TFLite](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/lite/delegates/flex/allowlisted_flex_ops.cc)
 
-### Convert a Model
+To convert to TFLite model with additional TF ops:
 
 ```python
 import tensorflow as tf
@@ -280,6 +324,7 @@ Clustering works by grouping the weights of each layer in a model into a predefi
 
 As a result, clustered models can be compressed more effecitvely, providing deployment benefits similar to pruning.
 
+> Note: For pruning and clustering, check out official TFLite Guide for more information.
 
 ## References
 
