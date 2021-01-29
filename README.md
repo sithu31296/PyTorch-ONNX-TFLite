@@ -4,20 +4,26 @@
 
 Convert PyTorch Models to TFLite and run inference in TFLite Python API.
 
+## Tested Environment
+
+* pytorch==1.7.1
+* tensorflow==2.4.1
+* onnx==1.8.0
+* onnx-tf==1.7.0
+
 ## PyTorch to ONNX
 
 Load the PyTorch Model:
 
 ```python
-device = torch.device('cpu')
 model = Model()
-model.load_state_dict(torch.load(pt_model_path, map_location=device)).eval()
+model.load_state_dict(torch.load(pt_model_path, map_location='cpu')).eval()
 ```
 
 Prepare the Input:
 
 ```python
-img = torch.zeros((1, 3, height, width))
+sample_input = torch.rand((batch_size, channels, height, width))
 ```
 
 Export to ONNX format:
@@ -25,10 +31,10 @@ Export to ONNX format:
 ```python
 torch.onnx.export(
     model,                  # PyTorch Model
-    img,                    # Input tensor
+    sample_input,                    # Input tensor
     onnx_model_path,        # Output file (eg. 'output_model.onnx')
     opset_version=12,       # Operator support version
-    input_names=['image']   # Input tensor name (arbitary)
+    input_names=['input']   # Input tensor name (arbitary)
     output_names=['output'] # Output tensor name (arbitary)
 )
 ```
@@ -43,20 +49,12 @@ You cannot convert ONNX model directly into TFLite model. You must first convert
 
 Use [onnx-tensorflow](https://github.com/onnx/onnx-tensorflow) to convert models from ONNX to Tensorflow.
 
-For Tensorflow 1.x, install as follows:
-
-```bash
-pip install onnx-tf
-```
-
-For Tensorflow 2.x, install as follows:
+Install as follows:
 
 ```bash
 git clone https://github.com/onnx/onnx-tensorflow.git && cd onnx-tensorflow
 pip install -e .
 ```
-
-> **_Note_**: TensorFlow version means the version of TensorFlow installed in your system. It effects in TFLite conversion.
 
 Load the ONNX model:
 
@@ -80,73 +78,39 @@ Export TF model:
 tf_rep.export_graph(tf_model_path)
 ```
 
-You will get a Tensorflow `.pb` model.
+You will get a Tensorflow model in *SavedModel* format.
+
+> Note: `tf_model_path` should not contain an extension like `.pb`.
 
 
 ## TF to TFLite
 
-To convert TF models into TFLite models, you can use official `tf.lite.TFLiteConverter` class.
+To convert TF *SavedModel* format into TFLite models, you can use official `tf.lite.TFLiteConverter` class.
 
-If you installed TensorFlow 1.x, you can directly convert `.pb` model into `.tflite` model.
+```python
+# Convert the model
+converter = tf.lite.TFLiteConverter.from_saved_model(tf_model_path)
+tflite_model = converter.convert()
 
-To do this:
+# Save the model
+with open(tflite_model_path, 'wb') as f:
+    f.write(tflite_model)
+```
+
+## Load and Run TF Model
 
 ```python
 import tensorflow as tf
 
-converter = tf.compat.v1.lite.TFLiteConverter.from_frozen_graph(
-    graph_def_file=tf_model_path,
-    input_arrys=['image'],
-    input_shapes={'image': [1, height, width, 3]},
-    output_arrays=['output']
-)
-tflite_model = converter.convert()
+model = tf.saved_model.load(tf_model_path)
+model.trainable = False
 
-with open(tflite_model_path, 'wb') as f:
-    f.write(tflite_model)
+input_tensor = tf.random.uniform([batch_size, channels, height, width])
+
+out = model(**{'input': input_tensor})
 ```
-
-For TensorFlow 2.x, you cannot convert `.pb` model directly into `.tflite` model because `TFLiteConverter` doesn't support `.pb` only model anymore. You must first convert `.pb` model into Frozen graph and convert with `from_concrete_functions()`.
-
-```python
-def wrap_frozen_graph(graph_def, inputs, outputs):
-    def _import_graph_def():
-        tf.compat.v1.import_graph_def(graph_def, name="")
-
-    wrapped_import = tf.compat.v1.wrap_function(_import_graph_def, [])
-    import_graph = wrapped_import.graph
-
-    return wrapped_import.prune(
-        tf.nest.map_structure(import_graph.as_graph_element, inputs),
-        tf.nest.map_structure(import_graph.as_graph_element, outputs)
-    )
-
-with tf.io.gfile.GFile(tf_model_path, 'rb') as f:
-    graph_def = tf.compat.v1.GraphDef()
-    loaded = graph_def.ParseFromString(f.read())
-
-frozen_func = wrap_frozen_graph(
-    graph_def,
-    inputs=["images"],  
-    outputs=["output"]  
-)
-
-converter = tf.lite.TFLiteConverter.from_concrete_functions([frozen_func])
-converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS, tf.lite.OpsSet.SELECT_TF_OPS]
-converter.optimizations = [tf.lite.Optimize.DEFAULT]
-
-tf_lite_model = converter.convert()
-
-with open(tflite_model_path, 'wb') as f:
-    f.write(tflite_model)
-```
-
-> **_Note_**: If possible, use TensorFlow 2.x method because inference codes and optimizations are better in TensorFlow 2.x.
-
 
 ## Load and Run TFLite Model 
-
-The following sections are only for TensorFlow 2.x.
 
 ```python
 import numpy as np
