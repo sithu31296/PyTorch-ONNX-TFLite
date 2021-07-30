@@ -1,5 +1,7 @@
 # TFLite Conversion
 
+### This project will not be updated anymore. Please use [torch_optimize](https://github.com/sithu31296/torch_optimize).
+
 <h3 style="color:#ac5353;"> PyTorch -> ONNX -> TF -> TFLite </h3>
 
 Convert PyTorch Models to TFLite and run inference in TFLite Python API.
