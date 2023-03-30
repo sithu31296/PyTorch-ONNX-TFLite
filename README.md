@@ -34,7 +34,7 @@ torch.onnx.export(
     sample_input,                    # Input tensor
     onnx_model_path,        # Output file (eg. 'output_model.onnx')
     opset_version=12,       # Operator support version
-    input_names=['input']   # Input tensor name (arbitary)
+    input_names=['input'],   # Input tensor name (arbitary)
     output_names=['output'] # Output tensor name (arbitary)
 )
 ```
